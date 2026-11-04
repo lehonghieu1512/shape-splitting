@@ -10,7 +10,7 @@ function makeClassList() {
   };
 }
 
-function makeCanvas() {
+function makeCanvas(onFillText = () => {}) {
   return {
     width: 800,
     height: 600,
@@ -32,7 +32,7 @@ function makeCanvas() {
       save: () => {},
       restore: () => {},
       createLinearGradient: () => ({ addColorStop: () => {} }),
-      fillText: () => {},
+      fillText: text => onFillText(text),
       setTransform: () => {},
       drawImage: () => {}
     })
@@ -58,6 +58,7 @@ function makeUi() {
     roundBadge: { textContent: '' },
     totalScore: { textContent: '0' },
     targetChips: { innerHTML: '' },
+    currentPiecesContainer: { style: { display: 'flex' } },
     currentChips: { innerHTML: '' },
     roundStatusBox: { className: '', classList: makeClassList() },
     roundStatusText: { textContent: '', innerHTML: '' },
@@ -84,6 +85,28 @@ const Physics = require('../src/physics.js');
 const Geometry = require('../src/geometry.js');
 const ui = makeUi();
 const game = new Game.GameApp(makeCanvas(), ui);
+
+const drawnLabels = [];
+const labelContext = makeCanvas(text => drawnLabels.push(text)).getContext('2d');
+const labelTestPiece = new Physics.Piece([
+  { x: 100, y: 100 },
+  { x: 180, y: 100 },
+  { x: 180, y: 160 },
+  { x: 100, y: 160 }
+]);
+game.pieces = [labelTestPiece];
+game.round = 59;
+game.drawPiece(labelContext, labelTestPiece);
+assert.strictEqual(drawnLabels.length, 1, 'piece percentage should still appear before round 60');
+game.round = 60;
+game.drawPiece(labelContext, labelTestPiece);
+assert.strictEqual(drawnLabels.length, 1, 'piece percentage should be hidden from round 60 onward');
+game.round = 89;
+game.updateHUD();
+assert.strictEqual(ui.currentPiecesContainer.style.display, 'flex', 'Current row should remain visible before round 90');
+game.round = 90;
+game.updateHUD();
+assert.strictEqual(ui.currentPiecesContainer.style.display, 'none', 'Current row should be hidden starting at round 90');
 
 const requiredShapes = [
   'createRandomHardPolygon',
@@ -139,6 +162,20 @@ game.generateRound(18);
 assert.ok(game.shapeDifficultyTier === 4, 'round 18 should use tier 4 even when selected directly');
 assert.strictEqual(Shapes.SHAPE_DIFFICULTY[game.selectedShape], 4, 'round 18 should select a hard shape');
 
+const shapeTierRules = [
+  [21, 1],
+  [25, 1],
+  [26, 2],
+  [31, 3],
+  [36, 4],
+  [40, 4],
+  [41, 1]
+];
+for (const [roundNumber, expectedTier] of shapeTierRules) {
+  game.updateDifficultyTier(roundNumber);
+  assert.strictEqual(game.shapeDifficultyTier, expectedTier, `round ${roundNumber} should repeat the 20-round shape tier cycle`);
+}
+
 const targetRules = [
   [1, 2, 10],
   [5, 2, 10],
@@ -170,14 +207,21 @@ const floatSpeedRules = [
   [25, 36],
   [26, 18],
   [30, 36],
-  [31, 18]
+  [31, 18],
+  [40, 36],
+  [41, 22.5],
+  [45, 40.5],
+  [46, 27],
+  [50, 45],
+  [51, 31.5]
 ];
 
 for (const [roundNumber, expectedSpeed] of floatSpeedRules) {
-  assert.strictEqual(game.getRoundFloatSpeed(roundNumber), expectedSpeed, `round ${roundNumber} should use the expected floating speed`);
+  const boostedSpeed = expectedSpeed * 1.265;
+  assert.ok(Math.abs(game.getRoundFloatSpeed(roundNumber) - boostedSpeed) < 0.001, `round ${roundNumber} should use the faster scheduled floating speed`);
   game.generateRound(roundNumber);
   const pieceSpeed = Math.hypot(game.pieces[0].vx, game.pieces[0].vy);
-  assert.ok(Math.abs(pieceSpeed - expectedSpeed) < 0.001, `round ${roundNumber} pieces should start at the scheduled speed`);
+  assert.ok(Math.abs(pieceSpeed - boostedSpeed) < 0.001, `round ${roundNumber} pieces should start at the faster scheduled speed`);
 }
 
 for (const name of requiredShapes) {
@@ -211,8 +255,17 @@ game.generateRound(21);
 assert.strictEqual(game.round, 21, 'generating a selected round should update the game round');
 assert.strictEqual(ui.roundBadge.textContent, 'Round 21', 'generating a selected round should update the round indicator');
 assert.strictEqual(game.getActivePhysicsMode(), 'slowFloat', 'round 21 should enable slow floating physics');
+assert.strictEqual(game.shapeDifficultyTier, 1, 'round 21 should restart the shape difficulty cycle');
+assert.strictEqual(Shapes.SHAPE_DIFFICULTY[game.selectedShape], 1, 'round 21 should select from the first difficulty tier');
 const initialFloatSpeed = Math.hypot(game.pieces[0].vx, game.pieces[0].vy);
-assert.ok(Math.abs(initialFloatSpeed - 18) < 0.001, 'round 21 pieces should begin at the slowest floating speed');
+assert.ok(Math.abs(initialFloatSpeed - 22.77) < 0.001, 'round 21 pieces should begin at the faster slowest floating speed');
+
+game.round = 69;
+game.loadShape('star');
+const round69StarRadius = game.pieces[0].radius;
+game.round = 70;
+game.loadShape('star');
+assert.ok(Math.abs(game.pieces[0].radius - round69StarRadius * 0.5) < 0.001, 'all shapes should be half-size starting at round 70');
 
 game.loadShape('hardWisp');
 const hardWisp = game.pieces[0];
@@ -294,6 +347,26 @@ for (let frame = 0; frame < 1000; frame++) {
 }
 assert.ok(Math.hypot(rightPiece.vx, rightPiece.vy) >= 17.5, 'slow-float speed should remain steady through repeated bounces');
 
+const wanderingPiece = makeBoundaryPiece(200, 200, 18, 0);
+wanderingPiece.slowFloatTurnTimer = 10;
+wanderingPiece.slowFloatTargetTurnRate = 0.3;
+let previousHeading = 0;
+let maximumHeadingStep = 0;
+for (let frame = 0; frame < 120; frame++) {
+  wanderingPiece.update(0.05, 'slowFloat', null, 18);
+  const heading = Math.atan2(wanderingPiece.vy, wanderingPiece.vx);
+  const headingStep = Math.atan2(Math.sin(heading - previousHeading), Math.cos(heading - previousHeading));
+  maximumHeadingStep = Math.max(maximumHeadingStep, Math.abs(headingStep));
+  previousHeading = heading;
+}
+assert.ok(previousHeading > 0.2, 'slow-float motion should gradually curve from its initial heading');
+assert.ok(maximumHeadingStep < 0.03, 'slow-float heading changes should remain smooth');
+assert.ok(Math.abs(Math.hypot(wanderingPiece.vx, wanderingPiece.vy) - 18) < 0.001, 'wandering should preserve the scheduled cruise speed');
+
+const straightFloatPiece = makeBoundaryPiece(200, 200, 18, 0);
+straightFloatPiece.update(0.05, 'float', playBounds);
+assert.ok(Math.abs(straightFloatPiece.vy) < 0.001, 'ordinary float mode should not inherit slow-float wandering');
+
 const collisionA = makeBoundaryPiece(130, 200, 18, 0);
 const collisionB = makeBoundaryPiece(145, 200, -18, 0);
 const collisionAStart = { x: collisionA.x, y: collisionA.y };
@@ -302,7 +375,7 @@ Physics.resolvePieceCollisions([collisionA, collisionB], 'slowFloat');
 assert.ok(Math.hypot(collisionA.x - collisionAStart.x, collisionA.y - collisionAStart.y) <= 1.51, 'slow-float collision correction should not flick the first piece');
 assert.ok(Math.hypot(collisionB.x - collisionBStart.x, collisionB.y - collisionBStart.y) <= 1.51, 'slow-float collision correction should not flick the second piece');
 assert.ok(collisionA.vx < 0 && collisionB.vx > 0, 'slow-float pieces should reflect away from each other immediately');
-assert.ok(Math.abs(Math.abs(collisionA.vx) - Math.abs(rightPiece.vx)) < 0.001, 'piece collision should preserve normal speed like a boundary bounce');
+assert.ok(Math.abs(Math.hypot(collisionA.vx, collisionA.vy) - 18) < 0.001, 'piece collision should preserve the scheduled cruise speed');
 collisionA.update(0.1, 'slowFloat');
 assert.ok(Math.abs(Math.hypot(collisionA.vx, collisionA.vy) - 18) < 0.001, 'piece bounce should keep the slowest cruise speed');
 for (let frame = 0; frame < 5 && Physics.checkPolygonsOverlap(collisionA.getWorldPoints(), collisionB.getWorldPoints()); frame++) {

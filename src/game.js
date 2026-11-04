@@ -373,7 +373,8 @@
 
     updateDifficultyTier(roundNumber = this.round) {
       const round = Math.max(1, Math.floor(roundNumber));
-      this.shapeDifficultyTier = Math.min(4, 1 + Math.floor((round - 1) / 5));
+      const cycleRound = ((round - 1) % 20) + 1;
+      this.shapeDifficultyTier = 1 + Math.floor((cycleRound - 1) / 5);
     }
 
     getShapeChoicesForCurrentDifficulty() {
@@ -392,7 +393,8 @@
     getRoundFloatSpeed(roundNumber = this.round) {
       const round = Math.max(21, Math.floor(roundNumber));
       const cycleStep = (round - 21) % 5;
-      return 18 + cycleStep * 4.5;
+      const postFortyBoosts = round >= 41 ? Math.floor((round - 41) / 5) + 1 : 0;
+      return (18 + cycleStep * 4.5 + postFortyBoosts * 4.5) * 1.265;
     }
 
     createRoundTargets(roundNumber) {
@@ -670,6 +672,14 @@
         }));
       }
 
+      if (this.round >= 70) {
+        const centroid = Geometry.polygonCentroid(poly);
+        poly = poly.map(point => ({
+          x: centroid.x + (point.x - centroid.x) * 0.5,
+          y: centroid.y + (point.y - centroid.y) * 0.5
+        }));
+      }
+
       this.pieces = [new Physics.Piece(poly)];
       this.initialArea = this.pieces[0].area;
       this.updateHUD();
@@ -869,6 +879,9 @@
             // Percent Challenge Round Bar
             if (this.gameMode === 'percentChallenge') {
               if (this.ui.roundBar) this.ui.roundBar.style.display = 'flex';
+              if (this.ui.currentPiecesContainer) {
+                this.ui.currentPiecesContainer.style.display = this.round >= 90 ? 'none' : 'flex';
+              }
               if (this.ui.roundBadge) this.ui.roundBadge.textContent = `Round ${this.round}`;
               if (this.ui.totalScore) this.ui.totalScore.textContent = this.totalScore.toLocaleString();
 
@@ -1104,9 +1117,9 @@
             ctx.stroke();
 
             // Piece area percentage label (only if piece is large enough)
-            const totalArea = this.pieces.reduce((s, p) => s + p.area, 0);
-            const pct = (piece.area / totalArea) * 100;
-            if (bounds.width > 36 && bounds.height > 24) {
+            if (this.round < 60 && bounds.width > 36 && bounds.height > 24) {
+              const totalArea = this.pieces.reduce((s, p) => s + p.area, 0);
+              const pct = (piece.area / totalArea) * 100;
               const center = piece.centroid;
               // World coordinates of centroid
               const cos = Math.cos(piece.angle);

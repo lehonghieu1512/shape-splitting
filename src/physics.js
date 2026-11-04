@@ -59,6 +59,9 @@
       this.vy = 0;
       this.angle = 0;
       this.vAngle = 0;
+      this.slowFloatTurnRate = 0;
+      this.slowFloatTargetTurnRate = 0;
+      this.slowFloatTurnTimer = 0;
 
       // Color
       if (color) {
@@ -117,6 +120,23 @@
           this.vx = Math.cos(angle) * nextSpeed;
           this.vy = Math.sin(angle) * nextSpeed;
         }
+
+        this.slowFloatTurnTimer -= dt;
+        if (this.slowFloatTurnTimer <= 0) {
+          this.slowFloatTargetTurnRate = (Math.random() - 0.5) * 0.7;
+          this.slowFloatTurnTimer = 1.2 + Math.random() * 1.6;
+        }
+
+        const maxTurnChange = 0.45 * dt;
+        const turnDifference = this.slowFloatTargetTurnRate - this.slowFloatTurnRate;
+        this.slowFloatTurnRate += Math.max(-maxTurnChange, Math.min(maxTurnChange, turnDifference));
+
+        const turnAngle = this.slowFloatTurnRate * dt;
+        const cosTurn = Math.cos(turnAngle);
+        const sinTurn = Math.sin(turnAngle);
+        const vx = this.vx;
+        this.vx = vx * cosTurn - this.vy * sinTurn;
+        this.vy = vx * sinTurn + this.vy * cosTurn;
         this.vAngle *= 0.998;
       } else if (mode === 'fixed') {
         // Slight separation damp to zero quickly
