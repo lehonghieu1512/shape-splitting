@@ -635,11 +635,32 @@
         case 'hardSkew':
           poly = Shapes.createHardSkew(cx, cy, radius * 2.1, radius * 1.8);
           break;
+        case 'randomHard':
+          poly = Shapes.createRandomHardPolygon(cx, cy, radius * 2.1, radius * 1.9);
+          break;
         case 'irregular':
           poly = Shapes.createRandomPolygon(cx, cy, radius, 8, 0.65);
           break;
         default:
           poly = Shapes.createStar(cx, cy, radius, radius * 0.44, 5);
+      }
+
+      if (this.gameMode === 'percentChallenge' && this.round >= 21) {
+        const clearance = Math.min(32, Math.max(0, Math.min(this.width - 40, this.height - 270) * 0.1));
+        const safeLeft = 20 + clearance;
+        const safeRight = this.width - 20 - clearance;
+        const safeTop = 140 + clearance;
+        const safeBottom = this.height - 130 - clearance;
+        const safeCenterX = (safeLeft + safeRight) / 2;
+        const safeCenterY = (safeTop + safeBottom) / 2;
+        const centroid = Geometry.polygonCentroid(poly);
+        const radius = Math.max(...poly.map(point => Math.hypot(point.x - centroid.x, point.y - centroid.y)));
+        const fitScale = Math.min(1, Math.max(0, Math.min(safeRight - safeLeft, safeBottom - safeTop) - 12) / (radius * 2));
+
+        poly = poly.map(point => ({
+          x: safeCenterX + (point.x - centroid.x) * fitScale,
+          y: safeCenterY + (point.y - centroid.y) * fitScale
+        }));
       }
 
       this.pieces = [new Physics.Piece(poly)];

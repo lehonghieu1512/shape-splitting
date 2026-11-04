@@ -58,7 +58,8 @@
     hardScallop: 4,
     hardRook: 4,
     hardDart: 4,
-    hardSkew: 4
+    hardSkew: 4,
+    randomHard: 4
   });
 
   function createRegularPolygon(cx, cy, radius, sides) {
@@ -716,6 +717,53 @@
         return Geometry.cleanPolygon(Geometry.ensureCCW(pts), 2);
       }
 
+      function createRandomHardPolygon(cx, cy, width, height) {
+        const spikes = Array.from({ length: 3 + Math.floor(Math.random() * 3) }, () => ({
+          angle: Math.random() * Math.PI * 2,
+          width: 0.1 + Math.random() * 0.16,
+          height: 0.34 + Math.random() * 0.38
+        }));
+        const dents = Array.from({ length: 2 + Math.floor(Math.random() * 3) }, () => ({
+          angle: Math.random() * Math.PI * 2,
+          width: 0.2 + Math.random() * 0.2,
+          depth: 0.2 + Math.random() * 0.22
+        }));
+        const phaseA = Math.random() * Math.PI * 2;
+        const phaseB = Math.random() * Math.PI * 2;
+        const phaseC = Math.random() * Math.PI * 2;
+        const pts = [];
+        const steps = 80;
+
+        for (let i = 0; i < steps; i++) {
+          const theta = (i / steps) * Math.PI * 2;
+          let r = 0.78 +
+            0.18 * Math.sin(3 * theta + phaseA) +
+            0.13 * Math.cos(5 * theta + phaseB) +
+            0.09 * Math.sin(2 * theta + phaseC) +
+            (Math.random() - 0.5) * 0.045;
+
+          for (const spike of spikes) {
+            const delta = Math.atan2(Math.sin(theta - spike.angle), Math.cos(theta - spike.angle));
+            const influence = Math.max(0, 1 - Math.abs(delta) / spike.width);
+            r += spike.height * influence * influence;
+          }
+
+          for (const dent of dents) {
+            const delta = Math.atan2(Math.sin(theta - dent.angle), Math.cos(theta - dent.angle));
+            const influence = Math.max(0, 1 - Math.abs(delta) / dent.width);
+            r -= dent.depth * influence * influence;
+          }
+
+          r = Math.max(0.3, Math.min(1.55, r));
+          pts.push({
+            x: cx + Math.cos(theta) * (width / 2) * r,
+            y: cy + Math.sin(theta) * (height / 2) * r
+          });
+        }
+
+        return Geometry.cleanPolygon(Geometry.ensureCCW(pts), 0.75);
+      }
+
       const HARD_SHAPES = Object.freeze([
         'hardWisp',
         'hardTalon',
@@ -731,7 +779,8 @@
         'hardScallop',
         'hardRook',
         'hardDart',
-        'hardSkew'
+        'hardSkew',
+        'randomHard'
       ]);
 
       return {
@@ -770,6 +819,7 @@
         createHardRook: createHardRook,
         createHardDart: createHardDart,
         createHardSkew: createHardSkew,
+        createRandomHardPolygon: createRandomHardPolygon,
         createBlob: createBlob,
         createDroplet: createDroplet,
         createLeaf: createLeaf,

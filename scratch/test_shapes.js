@@ -81,10 +81,12 @@ global.cancelAnimationFrame = () => {};
 const Game = require('../src/game.js');
 const Shapes = require('../src/shapes.js');
 const Physics = require('../src/physics.js');
+const Geometry = require('../src/geometry.js');
 const ui = makeUi();
 const game = new Game.GameApp(makeCanvas(), ui);
 
 const requiredShapes = [
+  'createRandomHardPolygon',
   'createBlob',
   'createDroplet',
   'createLeaf',
@@ -160,6 +162,12 @@ for (const name of requiredShapes) {
   assert.ok(Array.isArray(poly) && poly.length >= 3, `${name} should return a polygon`);
 }
 
+const randomHardOne = Shapes.createRandomHardPolygon(400, 300, 160, 130);
+const randomHardTwo = Shapes.createRandomHardPolygon(400, 300, 160, 130);
+assert.notDeepStrictEqual(randomHardOne, randomHardTwo, 'random hard shape should differ each time it is generated');
+assert.strictEqual(Shapes.SHAPE_DIFFICULTY.randomHard, 4, 'random hard should be classified as tier 4');
+assert.ok(Shapes.HARD_SHAPES.includes('randomHard'), 'random hard should be included in the hard-shape registry');
+
 for (const name of requiredHardShapes) {
   assert.strictEqual(typeof Shapes[name], 'function', `${name} should exist`);
   const poly = Shapes[name](400, 300, 120, 120);
@@ -181,6 +189,52 @@ assert.strictEqual(ui.roundBadge.textContent, 'Round 21', 'generating a selected
 assert.strictEqual(game.getActivePhysicsMode(), 'slowFloat', 'round 21 should enable slow floating physics');
 const initialFloatSpeed = Math.hypot(game.pieces[0].vx, game.pieces[0].vy);
 assert.ok(initialFloatSpeed >= 28 && initialFloatSpeed <= 40, 'round 21 pieces should begin with a visible but slow drift');
+
+game.loadShape('hardWisp');
+const hardWisp = game.pieces[0];
+let hardWispBounds = Geometry.polygonBounds(hardWisp.getWorldPoints());
+assert.ok(hardWispBounds.minY >= 172 && hardWispBounds.maxY <= 438, 'round-21 Hard Wisp should fit inside the play area with rotation clearance');
+hardWisp.vx = 0;
+hardWisp.vy = -36;
+hardWisp.vAngle = 0.12;
+let verticalReversals = 0;
+for (let frame = 0; frame < 30; frame++) {
+  const previousVy = hardWisp.vy;
+  hardWisp.update(0.05, 'slowFloat', { width: 800, height: 600, top: 120, bottom: 110 });
+  if (previousVy * hardWisp.vy < 0) verticalReversals++;
+}
+assert.ok(verticalReversals <= 1, 'round-21 Hard Wisp should not rapidly flick between boundaries');
+hardWispBounds = Geometry.polygonBounds(hardWisp.getWorldPoints());
+assert.ok(hardWispBounds.minY >= 140 && hardWispBounds.maxY <= 470, 'rotating Hard Wisp should remain within the safe play area');
+
+const roundShapeNames = [...Object.keys(Shapes.SHAPE_DIFFICULTY), 'hexagon', 'octagon', 'triangle'];
+for (const shapeName of roundShapeNames) {
+  game.loadShape(shapeName);
+  const piece = game.pieces[0];
+  assert.ok(piece.radius <= 127.001, `${shapeName} should fit inside the round-21 rotation-safe area`);
+  for (const angle of [0, Math.PI / 4, Math.PI / 2, Math.PI]) {
+    piece.angle = angle;
+    const bounds = Geometry.polygonBounds(piece.getWorldPoints());
+    assert.ok(bounds.minX >= 40 && bounds.maxX <= 760, `${shapeName} should stay within horizontal safe bounds`);
+    assert.ok(bounds.minY >= 172 && bounds.maxY <= 438, `${shapeName} should stay within vertical safe bounds`);
+  }
+}
+
+game.width = 320;
+game.height = 320;
+for (const shapeName of roundShapeNames) {
+  game.loadShape(shapeName);
+  const piece = game.pieces[0];
+  assert.ok(piece.radius <= 14.1, `${shapeName} should fit the minimum-size round-21 safe area`);
+  for (const angle of [0, Math.PI / 4, Math.PI / 2, Math.PI]) {
+    piece.angle = angle;
+    const bounds = Geometry.polygonBounds(piece.getWorldPoints());
+    assert.ok(bounds.minX >= 20 && bounds.maxX <= 300, `${shapeName} should fit minimum-width bounds when rotated`);
+    assert.ok(bounds.minY >= 140 && bounds.maxY <= 190, `${shapeName} should fit minimum-height bounds when rotated`);
+  }
+}
+game.width = 800;
+game.height = 600;
 
 const playBounds = { width: 400, height: 400, top: 120, bottom: 110 };
 const makeBoundaryPiece = (x, y, vx, vy) => {
