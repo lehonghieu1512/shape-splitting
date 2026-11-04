@@ -325,7 +325,7 @@
               const inverseMassTotal = inverseMassA + inverseMassB;
 
               if (inverseMassTotal > 0) {
-                const separation = Math.max(1, Math.min(overlapX, overlapY) + 1);
+                const separation = Math.min(1.5, Math.max(0.1, Math.min(overlapX, overlapY) + 1));
                 pA.x -= separationX * separation * inverseMassA / inverseMassTotal;
                 pA.y -= separationY * separation * inverseMassA / inverseMassTotal;
                 pB.x += separationX * separation * inverseMassB / inverseMassTotal;
@@ -350,7 +350,7 @@
             const unx = nx / len;
             const uny = ny / len;
 
-            const pushDist = 3.5;
+            const pushDist = 0.1;
             if (!pA.isGrabbed) {
               pA.x -= unx * pushDist;
               pA.y -= uny * pushDist;

@@ -218,12 +218,19 @@ assert.ok(Math.hypot(rightPiece.vx, rightPiece.vy) >= 35, 'slow-float speed shou
 
 const collisionA = makeBoundaryPiece(130, 200, 36, 0);
 const collisionB = makeBoundaryPiece(145, 200, -36, 0);
+const collisionAStart = { x: collisionA.x, y: collisionA.y };
+const collisionBStart = { x: collisionB.x, y: collisionB.y };
 Physics.resolvePieceCollisions([collisionA, collisionB], 'slowFloat');
-assert.strictEqual(Physics.checkPolygonsOverlap(collisionA.getWorldPoints(), collisionB.getWorldPoints()), false, 'colliding slow-float pieces should be separated');
+assert.ok(Math.hypot(collisionA.x - collisionAStart.x, collisionA.y - collisionAStart.y) <= 1.51, 'slow-float collision correction should not flick the first piece');
+assert.ok(Math.hypot(collisionB.x - collisionBStart.x, collisionB.y - collisionBStart.y) <= 1.51, 'slow-float collision correction should not flick the second piece');
 assert.ok(collisionA.vx < 0 && collisionB.vx > 0, 'slow-float pieces should reflect away from each other immediately');
 assert.ok(Math.abs(Math.abs(collisionA.vx) - Math.abs(rightPiece.vx)) < 0.001, 'piece collision should preserve normal speed like a boundary bounce');
 collisionA.update(0.1, 'slowFloat');
 assert.ok(Math.abs(Math.hypot(collisionA.vx, collisionA.vy) - 36) < 0.001, 'piece bounce should keep the same cruise speed as a boundary bounce');
+for (let frame = 0; frame < 5 && Physics.checkPolygonsOverlap(collisionA.getWorldPoints(), collisionB.getWorldPoints()); frame++) {
+  Physics.resolvePieceCollisions([collisionA, collisionB], 'slowFloat');
+}
+assert.strictEqual(Physics.checkPolygonsOverlap(collisionA.getWorldPoints(), collisionB.getWorldPoints()), false, 'gradual correction should eventually resolve the overlap');
 
 const diagonalCollisionA = makeBoundaryPiece(200, 200, 25, 25);
 const diagonalCollisionB = makeBoundaryPiece(205, 205, -25, -25);
