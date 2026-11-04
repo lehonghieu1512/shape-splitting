@@ -345,7 +345,7 @@
 
             // Smooth outward velocity impulse so they continue moving apart cleanly
             const activePhysicsMode = this.getActivePhysicsMode();
-            const impulseSpeed = activePhysicsMode === 'slowFloat' ? 24 :
+            const impulseSpeed = activePhysicsMode === 'slowFloat' ? this.getRoundFloatSpeed() * (2 / 3) :
               (activePhysicsMode === 'fixed' ? 35 : (activePhysicsMode === 'gravity' ? 65 : 85));
             subPiece.vx = piece.vx * 0.3 + outDirX * impulseSpeed;
             subPiece.vy = piece.vy * 0.3 + outDirY * impulseSpeed;
@@ -389,10 +389,17 @@
       return this.physicsMode;
     }
 
+    getRoundFloatSpeed(roundNumber = this.round) {
+      const round = Math.max(21, Math.floor(roundNumber));
+      const cycleStep = (round - 21) % 5;
+      return 18 + cycleStep * 4.5;
+    }
+
     createRoundTargets(roundNumber) {
       const round = Math.max(1, Math.floor(roundNumber));
-      const count = Math.min(6, 2 + Math.floor((round - 1) / 5));
-      const increment = round <= 10 ? 10 : round <= 20 ? 5 : 1;
+      const cycleRound = ((round - 1) % 20) + 1;
+      const count = 2 + Math.floor((cycleRound - 1) / 5);
+      const increment = cycleRound <= 10 ? 10 : 5;
       const units = 100 / increment;
       const boundaries = Array.from({ length: units - 1 }, (_, index) => index + 1);
 
@@ -725,9 +732,10 @@
 
             this.loadShape(this.selectedShape);
             if (roundNumber >= 21) {
+              const floatSpeed = this.getRoundFloatSpeed(roundNumber);
               for (const piece of this.pieces) {
                 const angle = Math.random() * Math.PI * 2;
-                const speed = 32 + Math.random() * 8;
+                const speed = floatSpeed;
                 piece.vx = Math.cos(angle) * speed;
                 piece.vy = Math.sin(angle) * speed;
                 piece.vAngle = (Math.random() - 0.5) * 0.12;
@@ -991,8 +999,9 @@
               bottom: 110
             };
             const activePhysicsMode = this.getActivePhysicsMode();
+            const slowFloatSpeed = this.getRoundFloatSpeed();
             for (const p of this.pieces) {
-              p.update(dt, activePhysicsMode, bounds);
+              p.update(dt, activePhysicsMode, bounds, slowFloatSpeed);
             }
             Physics.resolvePieceCollisions(this.pieces, activePhysicsMode);
             this.particleSystem.update(dt);

@@ -90,7 +90,7 @@
       this.vAngle += torque;
     }
 
-    update(dt, mode, bounds) {
+    update(dt, mode, bounds, slowFloatSpeed = 18) {
       if (this.isGrabbed) return;
 
       if (mode === 'gravity') {
@@ -106,7 +106,7 @@
         this.vy *= 0.965;
         this.vAngle *= 0.95;
       } else if (mode === 'slowFloat') {
-        const targetSpeed = 36;
+        const targetSpeed = slowFloatSpeed;
         const speed = Math.hypot(this.vx, this.vy);
         const nextSpeed = Math.min(targetSpeed, speed + 18 * dt);
         if (speed > 1e-6) {

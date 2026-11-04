@@ -146,7 +146,13 @@ const targetRules = [
   [10, 3, 10],
   [11, 4, 5],
   [20, 5, 5],
-  [21, 6, 1]
+  [21, 2, 10],
+  [25, 2, 10],
+  [26, 3, 10],
+  [30, 3, 10],
+  [31, 4, 5],
+  [40, 5, 5],
+  [41, 2, 10]
 ];
 
 for (const [roundNumber, expectedCount, increment] of targetRules) {
@@ -154,6 +160,24 @@ for (const [roundNumber, expectedCount, increment] of targetRules) {
   assert.strictEqual(targets.length, expectedCount, `round ${roundNumber} should request ${expectedCount} percentages`);
   assert.strictEqual(targets.reduce((sum, value) => sum + value, 0), 100, `round ${roundNumber} targets should total 100%`);
   assert.ok(targets.every(value => value > 0 && value % increment === 0), `round ${roundNumber} targets should use ${increment}% increments`);
+}
+
+const floatSpeedRules = [
+  [21, 18],
+  [22, 22.5],
+  [23, 27],
+  [24, 31.5],
+  [25, 36],
+  [26, 18],
+  [30, 36],
+  [31, 18]
+];
+
+for (const [roundNumber, expectedSpeed] of floatSpeedRules) {
+  assert.strictEqual(game.getRoundFloatSpeed(roundNumber), expectedSpeed, `round ${roundNumber} should use the expected floating speed`);
+  game.generateRound(roundNumber);
+  const pieceSpeed = Math.hypot(game.pieces[0].vx, game.pieces[0].vy);
+  assert.ok(Math.abs(pieceSpeed - expectedSpeed) < 0.001, `round ${roundNumber} pieces should start at the scheduled speed`);
 }
 
 for (const name of requiredShapes) {
@@ -188,7 +212,7 @@ assert.strictEqual(game.round, 21, 'generating a selected round should update th
 assert.strictEqual(ui.roundBadge.textContent, 'Round 21', 'generating a selected round should update the round indicator');
 assert.strictEqual(game.getActivePhysicsMode(), 'slowFloat', 'round 21 should enable slow floating physics');
 const initialFloatSpeed = Math.hypot(game.pieces[0].vx, game.pieces[0].vy);
-assert.ok(initialFloatSpeed >= 28 && initialFloatSpeed <= 40, 'round 21 pieces should begin with a visible but slow drift');
+assert.ok(Math.abs(initialFloatSpeed - 18) < 0.001, 'round 21 pieces should begin at the slowest floating speed');
 
 game.loadShape('hardWisp');
 const hardWisp = game.pieces[0];
@@ -248,30 +272,30 @@ const makeBoundaryPiece = (x, y, vx, vy) => {
   return piece;
 };
 
-const rightPiece = makeBoundaryPiece(360, 200, 36, 0);
+const rightPiece = makeBoundaryPiece(375, 200, 18, 0);
 rightPiece.update(0.5, 'slowFloat', playBounds);
 assert.ok(rightPiece.vx < 0, 'slow-float pieces should bounce off the right boundary');
 assert.ok(Math.max(...rightPiece.getWorldPoints().map(point => point.x)) <= 380.001, 'right-bounced piece should stay inside the boundary');
 
-const leftPiece = makeBoundaryPiece(40, 200, -36, 0);
+const leftPiece = makeBoundaryPiece(25, 200, -18, 0);
 leftPiece.update(0.5, 'slowFloat', playBounds);
 assert.ok(leftPiece.vx > 0, 'slow-float pieces should bounce off the left boundary');
 
-const topPiece = makeBoundaryPiece(200, 150, 0, -36);
+const topPiece = makeBoundaryPiece(200, 150, 0, -18);
 topPiece.update(0.5, 'slowFloat', playBounds);
 assert.ok(topPiece.vy > 0, 'slow-float pieces should bounce off the top play-area boundary');
 
-const bottomPiece = makeBoundaryPiece(200, 260, 0, 36);
+const bottomPiece = makeBoundaryPiece(200, 260, 0, 18);
 bottomPiece.update(0.5, 'slowFloat', playBounds);
 assert.ok(bottomPiece.vy < 0, 'slow-float pieces should bounce off the bottom play-area boundary');
 
 for (let frame = 0; frame < 1000; frame++) {
   rightPiece.update(0.05, 'slowFloat', playBounds);
 }
-assert.ok(Math.hypot(rightPiece.vx, rightPiece.vy) >= 35, 'slow-float speed should remain steady through repeated bounces');
+assert.ok(Math.hypot(rightPiece.vx, rightPiece.vy) >= 17.5, 'slow-float speed should remain steady through repeated bounces');
 
-const collisionA = makeBoundaryPiece(130, 200, 36, 0);
-const collisionB = makeBoundaryPiece(145, 200, -36, 0);
+const collisionA = makeBoundaryPiece(130, 200, 18, 0);
+const collisionB = makeBoundaryPiece(145, 200, -18, 0);
 const collisionAStart = { x: collisionA.x, y: collisionA.y };
 const collisionBStart = { x: collisionB.x, y: collisionB.y };
 Physics.resolvePieceCollisions([collisionA, collisionB], 'slowFloat');
@@ -280,7 +304,7 @@ assert.ok(Math.hypot(collisionB.x - collisionBStart.x, collisionB.y - collisionB
 assert.ok(collisionA.vx < 0 && collisionB.vx > 0, 'slow-float pieces should reflect away from each other immediately');
 assert.ok(Math.abs(Math.abs(collisionA.vx) - Math.abs(rightPiece.vx)) < 0.001, 'piece collision should preserve normal speed like a boundary bounce');
 collisionA.update(0.1, 'slowFloat');
-assert.ok(Math.abs(Math.hypot(collisionA.vx, collisionA.vy) - 36) < 0.001, 'piece bounce should keep the same cruise speed as a boundary bounce');
+assert.ok(Math.abs(Math.hypot(collisionA.vx, collisionA.vy) - 18) < 0.001, 'piece bounce should keep the slowest cruise speed');
 for (let frame = 0; frame < 5 && Physics.checkPolygonsOverlap(collisionA.getWorldPoints(), collisionB.getWorldPoints()); frame++) {
   Physics.resolvePieceCollisions([collisionA, collisionB], 'slowFloat');
 }
