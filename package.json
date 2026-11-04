@@ -1,0 +1,22 @@
+{
+  "name": "shape-splitting-game",
+  "version": "1.0.0",
+  "description": "PolySlice - An interactive 2D physics-based shape splitting and slicing game.",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx -y serve . -l 3000",
+    "dev": "python3 -m http.server 3000",
+    "test": "node scratch/test_shapes.js"
+  },
+  "keywords": [
+    "game",
+    "canvas",
+    "polygon-clipping",
+    "computational-geometry",
+    "shape-splitting",
+    "web-audio"
+  ],
+  "author": "",
+  "license": "MIT"
+}
+

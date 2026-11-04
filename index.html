@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>PolySlice - Shape Splitting Game</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <!-- Top App Navigation & Stats -->
+  <header class="app-header">
+    <div class="brand-section">
+      <span class="brand-icon">⚡</span>
+      <h1 class="brand-title">POLYSLICE</h1>
+    </div>
+
+    <!-- Game Modes -->
+    <nav class="mode-tabs">
+        <button class="tab-btn active" data-mode="percentChallenge">
+          <span>🎯</span> Target % Rounds
+        </button>
+        <button class="tab-btn" data-mode="sandbox">
+          <span>🌌</span> Zen Sandbox
+        </button>
+        <button class="tab-btn" data-mode="customDraw">
+          <span>✏️</span> Draw Custom
+        </button>
+    </nav>
+
+    <!-- Header Stats & Quick Actions -->
+    <div class="header-actions">
+      <div class="stat-badge">
+        <span>Pieces:</span>
+        <strong id="piece-count">1</strong>
+      </div>
+      <div class="stat-badge">
+        <span>Cuts:</span>
+        <strong id="cut-count">0</strong>
+      </div>
+
+      <button id="btn-undo" class="action-btn" title="Undo (Ctrl+Z)" disabled>
+        <span>↩️</span> Undo
+      </button>
+      <button id="btn-redo" class="action-btn" title="Redo (Ctrl+Y)" disabled>
+        <span>↪️</span> Redo
+      </button>
+      <button id="btn-reset" class="action-btn" title="Reset (R)">
+        <span>🔄</span> Reset
+      </button>
+      <button id="btn-mute" class="action-btn" title="Toggle Sound (M)">
+        <span>🔊</span> Sound
+      </button>
+    </div>
+  </header>
+
+  <!-- Interactive Canvas Viewport -->
+  <main class="game-viewport">
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Dedicated Round Challenge Bar -->
+    <div id="round-challenge-bar" class="round-challenge-bar">
+      <div class="round-info">
+        <span class="round-badge" id="round-number-badge">Round 1</span>
+        <span class="score-badge">Score: <strong id="total-score-val">0</strong></span>
+      </div>
+
+      <div class="targets-container">
+        <span class="targets-label">Targets:</span>
+        <div id="target-chips" class="target-chips"></div>
+      </div>
+
+      <div class="current-pieces-container">
+        <span class="targets-label">Current:</span>
+        <div id="current-chips" class="current-chips"></div>
+      </div>
+
+      <div class="round-status-box" id="round-status-box">
+        <span id="round-status-text">Slice shape to match target percentages!</span>
+      </div>
+
+      <div class="round-actions">
+        <button id="btn-next-round" class="action-btn next-round-btn" style="display:none;">
+          Next Round ➡️
+        </button>
+        <button id="btn-retry-round" class="action-btn" title="Restart this round">
+          🔄 Retry
+        </button>
+      </div>
+    </div>
+
+    <!-- In-Game Instructions Overlay -->
+    <div class="instructions-overlay">
+      <div>🖱️ <strong>Click &amp; Drag</strong> to slice a straight line across shapes</div>
+      <div>✂️ <strong>Keep slicing</strong> pieces repeatedly to reach target percentages</div>
+      <div>⚠️ <strong>Over-slice penalty</strong>: More pieces than targets = 0 points!</div>
+      <div>⌨️ <span class="key">Ctrl+Z</span> Undo | <span class="key">Shift+Drag</span> Move piece</div>
+    </div>
+
+    <!-- Custom Draw Mode Top-Right Action Bar -->
+    <div id="custom-draw-bar" class="custom-draw-bar">
+      <span>✏️ Click anywhere to add vertices:</span>
+      <button id="btn-finish-custom" class="action-btn" style="background:#06d6a0;color:#000;font-weight:700;">
+        ✓ Finish Shape
+      </button>
+      <button id="btn-clear-custom" class="action-btn">
+        Clear Points
+      </button>
+      <button id="btn-cancel-custom" class="action-btn">
+        Exit
+      </button>
+    </div>
+
+    <!-- Toast Notification Banner for Challenges -->
+    <div id="toast-banner" class="toast-banner">
+      🎯 Round Started!
+    </div>
+
+    <!-- Bottom Floating Options Tray -->
+    <div class="floating-tray">
+      <!-- Shape Picker -->
+      <div class="control-group">
+        <label class="control-label" for="shape-select">Shape:</label>
+        <select id="shape-select" class="select-input">
+          <option value="star">⭐ Star (5-Point)</option>
+          <option value="fish">🐟 Ocean Fish</option>
+          <option value="heart">💖 Heart</option>
+          <option value="lightning">⚡ Lightning Bolt</option>
+          <option value="moon">🌙 Crescent Moon</option>
+          <option value="ghost">👻 Arcade Ghost</option>
+          <option value="crown">👑 Royal Crown</option>
+          <option value="diamond">💎 Diamond Gem</option>
+          <option value="ufo">🛸 UFO Saucer</option>
+          <option value="mushroom">🍄 Mushroom</option>
+          <option value="shield">🛡️ Hero Shield</option>
+          <option value="sword">⚔️ Knight Sword</option>
+          <option value="cloud">☁️ Puffy Cloud</option>
+          <option value="gear">⚙️ Mechanical Gear</option>
+          <option value="house">🏠 House</option>
+          <option value="hexagon">⬡ Hexagon</option>
+          <option value="octagon">🛑 Octagon</option>
+          <option value="triangle">🔺 Triangle</option>
+          <option value="cross">➕ Cross</option>
+          <option value="arrow">🏹 Arrow</option>
+          <option value="blob">🫧 Blob</option>
+          <option value="droplet">💧 Droplet</option>
+          <option value="leaf">🍃 Leaf</option>
+          <option value="flower">🌼 Flower</option>
+          <option value="pill">💊 Pill</option>
+          <option value="peanut">🥜 Peanut</option>
+          <option value="ribbon">🎀 Ribbon</option>
+          <option value="spiral">🌀 Spiral</option>
+          <option value="sunburst">☀️ Sunburst</option>
+          <option value="hexStar">✦ Hex Star</option>
+          <option value="hardWisp">🔥 Hard Wisp</option>
+          <option value="hardTalon">🔥 Hard Talon</option>
+          <option value="hardDrift">🔥 Hard Drift</option>
+          <option value="hardRift">🔥 Hard Rift</option>
+          <option value="hardLobe">🔥 Hard Lobe</option>
+          <option value="hardTear">🔥 Hard Tear</option>
+          <option value="hardSaw">🔥 Hard Saw</option>
+          <option value="hardFang">🔥 Hard Fang</option>
+          <option value="hardHook">🔥 Hard Hook</option>
+          <option value="hardGash">🔥 Hard Gash</option>
+          <option value="hardCurl">🔥 Hard Curl</option>
+          <option value="hardScallop">🔥 Hard Scallop</option>
+          <option value="hardRook">🔥 Hard Rook</option>
+          <option value="hardDart">🔥 Hard Dart</option>
+          <option value="hardSkew">🔥 Hard Skew</option>
+          <option value="irregular">🌀 Irregular Polygon</option>
+        </select>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Physics Mode -->
+      <div class="control-group">
+        <span class="control-label">Physics:</span>
+        <div class="segmented-control" id="physics-control">
+          <button class="seg-btn active" data-physics="float" title="Zero-G gentle drift">🌌 Float</button>
+          <button class="seg-btn" data-physics="gravity" title="Pieces fall and bounce">🍎 Gravity</button>
+          <button class="seg-btn" data-physics="fixed" title="Pieces stay in place">🔒 Fixed</button>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Cut Style -->
+      <div class="control-group">
+        <span class="control-label">Blade:</span>
+        <div class="segmented-control" id="cut-style-control">
+          <button class="seg-btn active" data-style="dragRelease" title="Aim line and release to cut">🎯 Precision
+            Aim</button>
+          <button class="seg-btn" data-style="continuous" title="Live slice as you drag">⚡ Live Slicer</button>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <!-- Beam Range -->
+      <div class="control-group">
+        <span class="control-label">Range:</span>
+        <div class="segmented-control" id="beam-control">
+          <button class="seg-btn active" data-beam="segment" title="Cuts along drawn segment only">📏 Segment</button>
+          <button class="seg-btn" data-beam="fullLine" title="Cuts across entire screen">🔦 Infinite Beam</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Scripts -->
+  <script src="src/geometry.js"></script>
+  <script src="src/shapes.js"></script>
+  <script src="src/audio.js"></script>
+  <script src="src/physics.js"></script>
+  <script src="src/game.js"></script>
+  <!-- Temporary round debugger: remove this include and attach call to remove it. -->
+  <script src="src/debug.js"></script>
+
+  <script>
+    // Initialize the game when DOM is loaded
+    document.addEventListener('DOMContentLoaded', () => {
+      const canvas = document.getElementById('game-canvas');
+      const uiElements = {
+        pieceCount: document.getElementById('piece-count'),
+        cutCount: document.getElementById('cut-count'),
+        undoBtn: document.getElementById('btn-undo'),
+        redoBtn: document.getElementById('btn-redo'),
+        resetBtn: document.getElementById('btn-reset'),
+        muteBtn: document.getElementById('btn-mute'),
+        toast: document.getElementById('toast-banner'),
+        shapeSelect: document.getElementById('shape-select'),
+        roundBar: document.getElementById('round-challenge-bar'),
+        roundBadge: document.getElementById('round-number-badge'),
+        totalScore: document.getElementById('total-score-val'),
+        targetChips: document.getElementById('target-chips'),
+        currentChips: document.getElementById('current-chips'),
+        roundStatusBox: document.getElementById('round-status-box'),
+        roundStatusText: document.getElementById('round-status-text'),
+        nextRoundBtn: document.getElementById('btn-next-round'),
+        retryRoundBtn: document.getElementById('btn-retry-round')
+      };
+
+      const game = new PolySlice.Game.GameApp(canvas, uiElements);
+
+      // Top Action Buttons
+      uiElements.undoBtn.addEventListener('click', () => game.undo());
+      uiElements.redoBtn.addEventListener('click', () => game.redo());
+      uiElements.resetBtn.addEventListener('click', () => {
+        if (game.gameMode === 'percentChallenge') {
+          game.retryRound();
+        } else {
+          game.resetShape();
+        }
+      });
+      uiElements.muteBtn.addEventListener('click', () => game.toggleSound());
+
+      // Round Challenge Buttons
+      if (uiElements.nextRoundBtn) {
+        uiElements.nextRoundBtn.addEventListener('click', () => game.nextRound());
+      }
+      if (uiElements.retryRoundBtn) {
+        uiElements.retryRoundBtn.addEventListener('click', () => game.retryRound());
+      }
+
+      // Shape Selector
+      const shapeSelect = document.getElementById('shape-select');
+      shapeSelect.addEventListener('change', (e) => {
+        game.loadShape(e.target.value);
+      });
+
+      // Mode Tabs
+      const modeTabs = document.querySelectorAll('.mode-tabs .tab-btn');
+      const customDrawBar = document.getElementById('custom-draw-bar');
+
+      modeTabs.forEach(btn => {
+        btn.addEventListener('click', () => {
+          modeTabs.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          const mode = btn.dataset.mode;
+          game.setGameMode(mode);
+
+          if (mode === 'customDraw') {
+            customDrawBar.classList.add('active');
+          } else {
+            customDrawBar.classList.remove('active');
+          }
+
+            if (mode === 'percentChallenge') {
+              game.showChallengeToast(`🎯 Round ${game.round}: Match the target percentages!`);
+            } else if (mode === 'sandbox') {
+              game.showChallengeToast('🌌 Free Sandbox Mode: Slicing playground!');
+            }
+          });
+      });
+
+      // Custom Draw Action Buttons
+      document.getElementById('btn-finish-custom').addEventListener('click', () => {
+        game.finishCustomDraw();
+        customDrawBar.classList.remove('active');
+        modeTabs.forEach(b => b.classList.remove('active'));
+        document.querySelector('.mode-tabs [data-mode="sandbox"]').classList.add('active');
+      });
+
+      document.getElementById('btn-clear-custom').addEventListener('click', () => {
+        game.clearCustomDraw();
+      });
+
+      document.getElementById('btn-cancel-custom').addEventListener('click', () => {
+        customDrawBar.classList.remove('active');
+        modeTabs.forEach(b => b.classList.remove('active'));
+        document.querySelector('.mode-tabs [data-mode="percentChallenge"]').classList.add('active');
+        game.setGameMode('percentChallenge');
+      });
+
+      // Physics Mode Segmented Buttons
+      const physicsBtns = document.querySelectorAll('#physics-control .seg-btn');
+      physicsBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          physicsBtns.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          game.setPhysicsMode(btn.dataset.physics);
+        });
+      });
+
+      // Cut Style Segmented Buttons
+      const cutStyleBtns = document.querySelectorAll('#cut-style-control .seg-btn');
+      cutStyleBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          cutStyleBtns.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          game.setCutStyle(btn.dataset.style);
+        });
+      });
+
+      // Beam Range Segmented Buttons
+      const beamBtns = document.querySelectorAll('#beam-control .seg-btn');
+      beamBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+          beamBtns.forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          game.setBeamMode(btn.dataset.beam);
+        });
+      });
+
+      // Expose game instance for console inspection
+      window.gameInstance = game;
+      PolySlice.Debug.attach(game);
+    });
+  </script>
+</body>
+
+</html>
