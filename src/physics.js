@@ -59,6 +59,7 @@
       this.vy = 0;
       this.angle = 0;
       this.vAngle = 0;
+      this.slowFloatHeading = Math.random() * Math.PI * 2;
       this.slowFloatTurnRate = 0;
       this.slowFloatTargetTurnRate = 0;
       this.slowFloatTurnTimer = 0;
@@ -111,14 +112,15 @@
       } else if (mode === 'slowFloat') {
         const targetSpeed = slowFloatSpeed;
         const speed = Math.hypot(this.vx, this.vy);
-        const nextSpeed = Math.min(targetSpeed, speed + 18 * dt);
-        if (speed > 1e-6) {
+        const minimumSpeed = targetSpeed * 0.3;
+        const nextSpeed = Math.min(targetSpeed, Math.max(minimumSpeed, speed + 18 * dt));
+        if (speed > 1e-3) {
+          this.slowFloatHeading = Math.atan2(this.vy, this.vx);
           this.vx = (this.vx / speed) * nextSpeed;
           this.vy = (this.vy / speed) * nextSpeed;
         } else {
-          const angle = Math.random() * Math.PI * 2;
-          this.vx = Math.cos(angle) * nextSpeed;
-          this.vy = Math.sin(angle) * nextSpeed;
+          this.vx = Math.cos(this.slowFloatHeading) * nextSpeed;
+          this.vy = Math.sin(this.slowFloatHeading) * nextSpeed;
         }
 
         this.slowFloatTurnTimer -= dt;
@@ -359,6 +361,12 @@
                   pA.vy -= impulse * inverseMassA * normalY;
                   pB.vx += impulse * inverseMassB * normalX;
                   pB.vy += impulse * inverseMassB * normalY;
+                  if (Math.hypot(pA.vx, pA.vy) <= 1e-3) {
+                    pA.slowFloatHeading = Math.atan2(-normalY, -normalX);
+                  }
+                  if (Math.hypot(pB.vx, pB.vy) <= 1e-3) {
+                    pB.slowFloatHeading = Math.atan2(normalY, normalX);
+                  }
                 }
               }
               continue;

@@ -57,14 +57,17 @@
       this.gameMode = 'percentChallenge';
       this.selectedShape = 'star';
       this.shapeDifficultyTier = 1;
+      this.shapeBagTier = null;
+      this.shapeBag = [];
 
       // Percent Challenge Round State
       this.round = 1;
-      this.totalScore = 0;
+      this.retryCount = 5;
+      this.retryLostThisRound = false;
+      this.isGameOver = false;
       this.roundTargetPercentages = [50, 50];
-      this.roundStatus = 'in_progress'; // 'in_progress', 'passed', 'failed_oversliced', 'failed_accuracy'
+      this.roundStatus = 'in_progress'; // 'in_progress', 'passed', 'failed_oversliced', 'failed_accuracy', 'game_over'
       this.roundAccuracy = 0;
-      this.roundScoreEarned = 0;
       this.autoAdvanceTimer = null;
       this.toastTimer = null;
 
@@ -183,6 +186,8 @@
     }
 
     handlePointerDown(pos, button, shiftKey) {
+      if (this.isChallengeSliceLocked()) return;
+
       // Audio activation on first interaction
       Audio.getContext();
 
@@ -274,6 +279,7 @@
      * Executes a cut across all pieces using the line from a to b.
      */
     executeSlice(a, b, isContinuous = false) {
+      if (this.isChallengeSliceLocked()) return;
       const dx = b.x - a.x;
       const dy = b.y - a.y;
       const len = Math.hypot(dx, dy);
@@ -371,6 +377,14 @@
       }
     }
 
+    isChallengeSliceLocked() {
+      return this.gameMode === 'percentChallenge' && (
+        this.isGameOver ||
+        this.roundStatus === 'passed' ||
+        this.roundStatus === 'failed_oversliced'
+      );
+    }
+
     updateDifficultyTier(roundNumber = this.round) {
       const round = Math.max(1, Math.floor(roundNumber));
       const cycleRound = ((round - 1) % 20) + 1;
@@ -385,6 +399,27 @@
       return Object.keys(difficultyMap).filter(name => difficultyMap[name] <= currentTier);
     }
 
+    getNextShapeForCurrentDifficulty() {
+      const pool = this.getShapeChoicesForCurrentDifficulty();
+      if (pool.length === 0) return 'star';
+
+      if (this.shapeBagTier !== this.shapeDifficultyTier || this.shapeBag.length === 0) {
+        this.shapeBagTier = this.shapeDifficultyTier;
+        this.shapeBag = pool.slice();
+        for (let index = this.shapeBag.length - 1; index > 0; index--) {
+          const swapIndex = Math.floor(Math.random() * (index + 1));
+          [this.shapeBag[index], this.shapeBag[swapIndex]] = [this.shapeBag[swapIndex], this.shapeBag[index]];
+        }
+
+        const lastIndex = this.shapeBag.length - 1;
+        if (this.shapeBag.length > 1 && this.shapeBag[lastIndex] === this.selectedShape) {
+          [this.shapeBag[0], this.shapeBag[lastIndex]] = [this.shapeBag[lastIndex], this.shapeBag[0]];
+        }
+      }
+
+      return this.shapeBag.pop();
+    }
+
     getActivePhysicsMode() {
       if (this.gameMode === 'percentChallenge' && this.round >= 21) return 'slowFloat';
       return this.physicsMode;
@@ -394,7 +429,7 @@
       const round = Math.max(21, Math.floor(roundNumber));
       const cycleStep = (round - 21) % 5;
       const postFortyBoosts = round >= 41 ? Math.floor((round - 41) / 5) + 1 : 0;
-      return (18 + cycleStep * 4.5 + postFortyBoosts * 4.5) * 1.265;
+      return (24 + cycleStep * 1.5 + postFortyBoosts * 4.5) * 1.265;
     }
 
     createRoundTargets(roundNumber) {
@@ -724,16 +759,16 @@
 
           // Target Percentages Round Challenge Logic
           generateRound(roundNumber) {
+            if (this.isGameOver) return;
             this.hideChallengeToast();
             this.round = roundNumber;
 
             this.updateDifficultyTier(roundNumber);
-            const shapePool = this.getShapeChoicesForCurrentDifficulty();
-            this.selectedShape = shapePool[Math.floor(Math.random() * shapePool.length)] || 'star';
+            this.selectedShape = this.getNextShapeForCurrentDifficulty();
             this.roundTargetPercentages = this.createRoundTargets(roundNumber);
             this.roundStatus = 'in_progress';
             this.roundAccuracy = 0;
-            this.roundScoreEarned = 0;
+            this.retryLostThisRound = false;
 
             if (this.autoAdvanceTimer) {
               clearTimeout(this.autoAdvanceTimer);
@@ -755,6 +790,7 @@
           }
 
           nextRound() {
+            if (this.isGameOver) return;
             if (this.autoAdvanceTimer) {
               clearTimeout(this.autoAdvanceTimer);
               this.autoAdvanceTimer = null;
@@ -766,6 +802,7 @@
           }
 
           retryRound() {
+            if (this.isGameOver) return;
             if (this.autoAdvanceTimer) {
               clearTimeout(this.autoAdvanceTimer);
               this.autoAdvanceTimer = null;
@@ -773,13 +810,44 @@
             this.hideChallengeToast();
             this.roundStatus = 'in_progress';
             this.roundAccuracy = 0;
-            this.roundScoreEarned = 0;
+            this.retryLostThisRound = false;
             this.resetShape();
             this.updateHUD();
           }
 
+          startOver() {
+            if (this.autoAdvanceTimer) {
+              clearTimeout(this.autoAdvanceTimer);
+              this.autoAdvanceTimer = null;
+            }
+            this.hideChallengeToast();
+            this.gameMode = 'percentChallenge';
+            this.round = 1;
+            this.retryCount = 5;
+            this.retryLostThisRound = false;
+            this.isGameOver = false;
+            this.roundStatus = 'in_progress';
+            this.roundAccuracy = 0;
+            this.shapeBagTier = null;
+            this.shapeBag = [];
+            this.selectedShape = 'star';
+            this.particleSystem.clear();
+            this.generateRound(this.round);
+            Audio.playPop();
+          }
+
+          loseRetry() {
+            if (this.retryLostThisRound || this.isGameOver) return;
+            this.retryLostThisRound = true;
+            this.retryCount = Math.max(0, this.retryCount - 1);
+            if (this.retryCount === 0) {
+              this.isGameOver = true;
+              this.roundStatus = 'game_over';
+            }
+          }
+
           evaluateRound() {
-            if (this.gameMode !== 'percentChallenge') return;
+            if (this.gameMode !== 'percentChallenge' || this.isGameOver) return;
 
             const k = this.roundTargetPercentages.length;
             const m = this.pieces.length;
@@ -791,10 +859,13 @@
 
             // Oversliced check: if pieces > commanded percentages, receive 0 points!
             if (m > k) {
-              this.roundStatus = 'failed_oversliced';
-              this.roundScoreEarned = 0;
+              this.loseRetry();
+              if (!this.isGameOver) this.roundStatus = 'failed_oversliced';
               Audio.playFail();
-              this.showChallengeToast(`❌ OVER-SLICED! ${m} pieces > target ${k}. 0 points! Press Undo (Ctrl+Z) or Retry.`);
+              this.showChallengeToast(this.isGameOver
+                ? 'GAME OVER! No retries left.'
+                : `❌ OVER-SLICED! ${m} pieces > target ${k}. Retries left: ${this.retryCount}. Press Undo or Retry.`);
+              this.updateHUD();
               return;
             }
 
@@ -807,20 +878,13 @@
               const accuracy = Math.max(0, 100 - totalDeviation);
               this.roundAccuracy = accuracy;
 
-              if (accuracy >= 80) {
+              if (accuracy >= 85) {
                 this.roundStatus = 'passed';
-                let stars = 1;
-                if (accuracy >= 94) stars = 3;
-                else if (accuracy >= 87) stars = 2;
-
-                const points = Math.round(1000 + accuracy * 10 + this.round * 100);
-                this.roundScoreEarned = points;
-                this.totalScore += points;
                 this.updateDifficultyTier(this.round);
 
                 Audio.playSuccess();
-                this.particleSystem.emitConfetti(this.width / 2, this.height * 0.35, stars * 35);
-                this.showChallengeToast(`🎉 ROUND ${this.round} CLEARED! Accuracy: ${accuracy.toFixed(1)}% (+${points} pts) ⭐x${stars}`);
+                this.particleSystem.emitConfetti(this.width / 2, this.height * 0.35, 70);
+                this.showChallengeToast(`🎉 ROUND ${this.round} CLEARED! Accuracy: ${accuracy.toFixed(1)}%`);
 
                 if (this.autoAdvanceTimer) clearTimeout(this.autoAdvanceTimer);
                 this.autoAdvanceTimer = setTimeout(() => {
@@ -829,10 +893,12 @@
                   }
                 }, 3200);
               } else {
-                this.roundStatus = 'failed_accuracy';
-                this.roundScoreEarned = 0;
+                this.loseRetry();
+                if (!this.isGameOver) this.roundStatus = 'failed_accuracy';
                 Audio.playFail();
-                this.showChallengeToast(`Accuracy ${accuracy.toFixed(1)}% is below 80%. Press Undo to try again!`);
+                this.showChallengeToast(this.isGameOver
+                  ? `GAME OVER! Accuracy ${accuracy.toFixed(1)}%. No retries left.`
+                  : `Accuracy ${accuracy.toFixed(1)}% is below 85%. Retries left: ${this.retryCount}. Press Undo or Retry.`);
               }
             } else {
               this.roundStatus = 'in_progress';
@@ -859,6 +925,9 @@
           }
 
           updateHUD() {
+            if (this.ui.gameOverOverlay) {
+              this.ui.gameOverOverlay.hidden = !this.isGameOver;
+            }
             if (this.ui.pieceCount) {
               this.ui.pieceCount.textContent = this.pieces.length;
             }
@@ -883,7 +952,7 @@
                 this.ui.currentPiecesContainer.style.display = this.round >= 90 ? 'none' : 'flex';
               }
               if (this.ui.roundBadge) this.ui.roundBadge.textContent = `Round ${this.round}`;
-              if (this.ui.totalScore) this.ui.totalScore.textContent = this.totalScore.toLocaleString();
+              if (this.ui.retryCount) this.ui.retryCount.textContent = this.retryCount;
 
               if (this.ui.targetChips) {
                 this.ui.targetChips.innerHTML = this.roundTargetPercentages
@@ -913,15 +982,18 @@
               if (this.ui.roundStatusBox && this.ui.roundStatusText) {
                 this.ui.roundStatusBox.className = 'round-status-box';
 
-                if (this.roundStatus === 'passed') {
+                if (this.roundStatus === 'game_over') {
+                  this.ui.roundStatusBox.classList.add('oversliced');
+                  this.ui.roundStatusText.innerHTML = '<strong>GAME OVER</strong> No retries left.';
+                } else if (this.roundStatus === 'passed') {
                   this.ui.roundStatusBox.classList.add('passed');
-                  this.ui.roundStatusText.innerHTML = `🎉 <strong>CLEARED!</strong> Accuracy: ${this.roundAccuracy.toFixed(1)}% (+${this.roundScoreEarned} pts)`;
+                  this.ui.roundStatusText.innerHTML = `🎉 <strong>CLEARED!</strong> Accuracy: ${this.roundAccuracy.toFixed(1)}%`;
                 } else if (this.roundStatus === 'failed_oversliced') {
                   this.ui.roundStatusBox.classList.add('oversliced');
-                  this.ui.roundStatusText.innerHTML = `❌ <strong>OVER-SLICED!</strong> (${m} pieces > target ${k}). 0 points! Press Undo or Retry.`;
+                  this.ui.roundStatusText.innerHTML = `❌ <strong>OVER-SLICED!</strong> (${m} pieces > target ${k}). Retries left: ${this.retryCount}. Press Undo or Retry.`;
                 } else if (this.roundStatus === 'failed_accuracy') {
                   this.ui.roundStatusBox.classList.add('oversliced');
-                  this.ui.roundStatusText.innerHTML = `⚠️ <strong>ACCURACY LOW (${this.roundAccuracy.toFixed(1)}%)</strong>. Press Undo to try again.`;
+                  this.ui.roundStatusText.innerHTML = `⚠️ <strong>ACCURACY LOW (${this.roundAccuracy.toFixed(1)}%)</strong>. Retries left: ${this.retryCount}. Press Undo or Retry.`;
                 } else {
                   if (m === 1) {
                     this.ui.roundStatusText.textContent = `Slice shape into ${k} pieces matching the targets!`;
@@ -932,7 +1004,10 @@
               }
 
               if (this.ui.nextRoundBtn) {
-                this.ui.nextRoundBtn.style.display = (this.roundStatus === 'passed') ? 'inline-flex' : 'none';
+                this.ui.nextRoundBtn.style.display = (!this.isGameOver && this.roundStatus === 'passed') ? 'inline-flex' : 'none';
+              }
+              if (this.ui.retryRoundBtn) {
+                this.ui.retryRoundBtn.style.display = this.isGameOver ? 'none' : '';
               }
             } else {
               if (this.ui.roundBar) this.ui.roundBar.style.display = 'none';

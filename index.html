@@ -64,7 +64,7 @@
     <div id="round-challenge-bar" class="round-challenge-bar">
       <div class="round-info">
         <span class="round-badge" id="round-number-badge">Round 1</span>
-        <span class="score-badge">Score: <strong id="total-score-val">0</strong></span>
+        <span class="retry-badge">Retries: <strong id="retry-count-val">5</strong></span>
       </div>
 
       <div class="targets-container">
@@ -89,6 +89,14 @@
           🔄 Retry
         </button>
       </div>
+    </div>
+
+    <div id="game-over-overlay" class="game-over-overlay" hidden>
+      <section class="game-over-dialog" role="dialog" aria-modal="true" aria-labelledby="game-over-title">
+        <h2 id="game-over-title">Game over</h2>
+        <p>No retries left.</p>
+        <button id="btn-start-over" class="action-btn">Start over</button>
+      </section>
     </div>
 
     <!-- In-Game Instructions Overlay -->
@@ -235,14 +243,16 @@
         shapeSelect: document.getElementById('shape-select'),
         roundBar: document.getElementById('round-challenge-bar'),
         roundBadge: document.getElementById('round-number-badge'),
-        totalScore: document.getElementById('total-score-val'),
+        retryCount: document.getElementById('retry-count-val'),
         targetChips: document.getElementById('target-chips'),
         currentPiecesContainer: document.querySelector('.current-pieces-container'),
         currentChips: document.getElementById('current-chips'),
         roundStatusBox: document.getElementById('round-status-box'),
         roundStatusText: document.getElementById('round-status-text'),
         nextRoundBtn: document.getElementById('btn-next-round'),
-        retryRoundBtn: document.getElementById('btn-retry-round')
+        retryRoundBtn: document.getElementById('btn-retry-round'),
+        gameOverOverlay: document.getElementById('game-over-overlay'),
+        startOverBtn: document.getElementById('btn-start-over')
       };
 
       const game = new PolySlice.Game.GameApp(canvas, uiElements);
@@ -277,8 +287,15 @@
       const modeTabs = document.querySelectorAll('.mode-tabs .tab-btn');
       const customDrawBar = document.getElementById('custom-draw-bar');
 
+      uiElements.startOverBtn.addEventListener('click', () => {
+        game.startOver();
+        modeTabs.forEach(tab => tab.classList.toggle('active', tab.dataset.mode === 'percentChallenge'));
+        customDrawBar.classList.remove('active');
+      });
+
       modeTabs.forEach(btn => {
         btn.addEventListener('click', () => {
+          if (game.isGameOver) return;
           modeTabs.forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
           const mode = btn.dataset.mode;

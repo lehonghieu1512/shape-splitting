@@ -56,14 +56,16 @@ function makeUi() {
     shapeSelect: { value: 'star' },
     roundBar: { style: { display: 'flex' } },
     roundBadge: { textContent: '' },
-    totalScore: { textContent: '0' },
+    retryCount: { textContent: '5' },
     targetChips: { innerHTML: '' },
     currentPiecesContainer: { style: { display: 'flex' } },
     currentChips: { innerHTML: '' },
     roundStatusBox: { className: '', classList: makeClassList() },
     roundStatusText: { textContent: '', innerHTML: '' },
     nextRoundBtn: { style: { display: 'none' } },
-    retryRoundBtn: { style: {} }
+    retryRoundBtn: { style: {} },
+    gameOverOverlay: { hidden: true },
+    startOverBtn: { addEventListener: () => {} }
   };
 }
 
@@ -157,6 +159,26 @@ assert.ok(game.shapeDifficultyTier === 1, 'rounds 1 through 5 should use tier 1'
 game.round = 6;
 game.updateDifficultyTier();
 assert.ok(game.shapeDifficultyTier === 2, 'round 6 should advance to tier 2');
+
+game.updateDifficultyTier(1);
+game.shapeBagTier = null;
+game.shapeBag = [];
+game.selectedShape = 'fish';
+const tierOnePool = game.getShapeChoicesForCurrentDifficulty();
+const tierOneDraws = [];
+for (let index = 0; index < tierOnePool.length; index++) {
+  game.selectedShape = game.getNextShapeForCurrentDifficulty();
+  tierOneDraws.push(game.selectedShape);
+}
+assert.strictEqual(new Set(tierOneDraws).size, tierOnePool.length, 'a tier should not repeat a shape until its pool is exhausted');
+const lastTierOneShape = game.selectedShape;
+game.selectedShape = game.getNextShapeForCurrentDifficulty();
+assert.notStrictEqual(game.selectedShape, lastTierOneShape, 'reshuffling a tier should avoid repeating the previous bag’s final shape');
+
+game.updateDifficultyTier(6);
+game.selectedShape = game.getNextShapeForCurrentDifficulty();
+assert.strictEqual(Shapes.SHAPE_DIFFICULTY[game.selectedShape], 2, 'a tier change should draw from the new difficulty pool');
+
 game.round = 1;
 game.generateRound(18);
 assert.ok(game.shapeDifficultyTier === 4, 'round 18 should use tier 4 even when selected directly');
@@ -200,20 +222,20 @@ for (const [roundNumber, expectedCount, increment] of targetRules) {
 }
 
 const floatSpeedRules = [
-  [21, 18],
-  [22, 22.5],
+  [21, 24],
+  [22, 25.5],
   [23, 27],
-  [24, 31.5],
-  [25, 36],
-  [26, 18],
-  [30, 36],
-  [31, 18],
-  [40, 36],
-  [41, 22.5],
-  [45, 40.5],
-  [46, 27],
-  [50, 45],
-  [51, 31.5]
+  [24, 28.5],
+  [25, 30],
+  [26, 24],
+  [30, 30],
+  [31, 24],
+  [40, 30],
+  [41, 28.5],
+  [45, 34.5],
+  [46, 33],
+  [50, 39],
+  [51, 37.5]
 ];
 
 for (const [roundNumber, expectedSpeed] of floatSpeedRules) {
@@ -258,7 +280,7 @@ assert.strictEqual(game.getActivePhysicsMode(), 'slowFloat', 'round 21 should en
 assert.strictEqual(game.shapeDifficultyTier, 1, 'round 21 should restart the shape difficulty cycle');
 assert.strictEqual(Shapes.SHAPE_DIFFICULTY[game.selectedShape], 1, 'round 21 should select from the first difficulty tier');
 const initialFloatSpeed = Math.hypot(game.pieces[0].vx, game.pieces[0].vy);
-assert.ok(Math.abs(initialFloatSpeed - 22.77) < 0.001, 'round 21 pieces should begin at the faster slowest floating speed');
+assert.ok(Math.abs(initialFloatSpeed - 30.36) < 0.001, 'round 21 pieces should begin at the increased baseline speed');
 
 game.round = 69;
 game.loadShape('star');
@@ -325,6 +347,12 @@ const makeBoundaryPiece = (x, y, vx, vy) => {
   return piece;
 };
 
+const movingIntoStillPiece = makeBoundaryPiece(130, 200, 18, 0);
+const stillPiece = makeBoundaryPiece(145, 200, 0, 0);
+Physics.resolvePieceCollisions([movingIntoStillPiece, stillPiece], 'slowFloat');
+movingIntoStillPiece.update(0.05, 'slowFloat', null, 18);
+assert.ok(movingIntoStillPiece.vx < -5, 'a stopped piece should resume smoothly away from the collision normal');
+
 const rightPiece = makeBoundaryPiece(375, 200, 18, 0);
 rightPiece.update(0.5, 'slowFloat', playBounds);
 assert.ok(rightPiece.vx < 0, 'slow-float pieces should bounce off the right boundary');
@@ -366,6 +394,59 @@ assert.ok(Math.abs(Math.hypot(wanderingPiece.vx, wanderingPiece.vy) - 18) < 0.00
 const straightFloatPiece = makeBoundaryPiece(200, 200, 18, 0);
 straightFloatPiece.update(0.05, 'float', playBounds);
 assert.ok(Math.abs(straightFloatPiece.vy) < 0.001, 'ordinary float mode should not inherit slow-float wandering');
+
+const retryUi = makeUi();
+const retryGame = new Game.GameApp(makeCanvas(), retryUi);
+assert.strictEqual(retryGame.retryCount, 5, 'challenge should start with five retries');
+retryGame.roundTargetPercentages = [50, 50];
+const makeAreaPiece = (x, width) => new Physics.Piece([
+  { x, y: 0 },
+  { x: x + width, y: 0 },
+  { x: x + width, y: 1 },
+  { x, y: 1 }
+]);
+retryGame.pieces = [makeAreaPiece(0, 60), makeAreaPiece(70, 40)];
+retryGame.evaluateRound();
+assert.strictEqual(retryGame.roundAccuracy, 80, 'test attempt should fall below the 85% threshold');
+assert.strictEqual(retryGame.retryCount, 4, 'accuracy below 85% should consume one retry');
+retryGame.updateHUD();
+assert.strictEqual(retryUi.retryCount.textContent, 4, 'HUD should display the remaining retry count');
+retryGame.evaluateRound();
+assert.strictEqual(retryGame.retryCount, 4, 're-evaluating the same failed attempt should not consume another retry');
+retryGame.retryRound();
+assert.strictEqual(retryGame.retryCount, 4, 'retrying the current round should not restore a spent retry');
+retryGame.isGameOver = false;
+retryGame.roundStatus = 'passed';
+retryGame.cutsCount = 0;
+retryGame.handlePointerDown({ x: 100, y: 100 }, 0, false);
+retryGame.executeSlice({ x: 0, y: 0 }, { x: 100, y: 100 });
+assert.strictEqual(retryGame.isDragging, false, 'a cleared round should not start another slice');
+assert.strictEqual(retryGame.cutsCount, 0, 'a cleared round should reject additional cuts');
+retryGame.roundStatus = 'failed_oversliced';
+retryGame.handlePointerDown({ x: 100, y: 100 }, 0, false);
+retryGame.executeSlice({ x: 0, y: 0 }, { x: 100, y: 100 });
+assert.strictEqual(retryGame.isDragging, false, 'an oversliced round should not start another slice');
+assert.strictEqual(retryGame.cutsCount, 0, 'an oversliced round should reject additional cuts');
+retryGame.retryCount = 1;
+retryGame.retryLostThisRound = false;
+retryGame.roundStatus = 'in_progress';
+retryGame.pieces = [makeAreaPiece(0, 60), makeAreaPiece(70, 40)];
+retryGame.evaluateRound();
+assert.strictEqual(retryGame.retryCount, 0, 'last failed attempt should consume the final retry');
+assert.strictEqual(retryGame.roundStatus, 'game_over', 'zero retries should end the game');
+retryGame.updateHUD();
+assert.strictEqual(retryUi.retryCount.textContent, 0, 'game-over HUD should show zero retries');
+assert.strictEqual(retryUi.retryRoundBtn.style.display, 'none', 'game over should disable retrying');
+assert.strictEqual(retryUi.gameOverOverlay.hidden, false, 'game over should display the Start over popup');
+const gameOverRound = retryGame.round;
+retryGame.nextRound();
+assert.strictEqual(retryGame.round, gameOverRound, 'game-over state should block advancing to another round');
+retryGame.startOver();
+assert.strictEqual(retryGame.round, 1, 'Start over should return to round 1');
+assert.strictEqual(retryGame.retryCount, 5, 'Start over should restore all five retries');
+assert.strictEqual(retryGame.isGameOver, false, 'Start over should clear game-over state');
+assert.strictEqual(retryUi.gameOverOverlay.hidden, true, 'Start over should close the popup');
+retryGame.hideChallengeToast();
 
 const collisionA = makeBoundaryPiece(130, 200, 18, 0);
 const collisionB = makeBoundaryPiece(145, 200, -18, 0);
