@@ -10,6 +10,18 @@
 
 <body>
 
+  <div id="start-screen" class="start-screen">
+    <section class="start-card" aria-labelledby="start-title">
+      <span class="brand-icon">⚡</span>
+      <h1 id="start-title">POLYSLICE</h1>
+      <p>Slice each shape to match the targets.</p>
+      <div class="start-actions">
+        <button id="btn-start-game" class="action-btn primary-start-btn">Start Game</button>
+        <button id="btn-open-tutorial" class="action-btn">Tutorial</button>
+      </div>
+    </section>
+  </div>
+
   <!-- Top App Navigation & Stats -->
   <header class="app-header">
     <div class="brand-section">
@@ -59,6 +71,26 @@
   <!-- Interactive Canvas Viewport -->
   <main class="game-viewport">
     <canvas id="game-canvas"></canvas>
+    <div id="tutorial-cut-guide" class="tutorial-cut-guide" aria-hidden="true" hidden></div>
+
+    <aside id="tutorial-panel" class="tutorial-panel" aria-live="polite" hidden>
+      <div class="tutorial-step-count" id="tutorial-step-count"></div>
+      <h2 id="tutorial-title"></h2>
+      <p id="tutorial-copy"></p>
+      <div id="tutorial-practice" class="tutorial-practice" hidden>
+        <div><span>Target</span><strong id="tutorial-target"></strong></div>
+        <div><span>Current</span><strong id="tutorial-current"></strong></div>
+        <div><span>Accuracy</span><strong id="tutorial-accuracy"></strong></div>
+      </div>
+      <p id="tutorial-feedback" class="tutorial-feedback"></p>
+      <div class="tutorial-actions">
+        <button id="btn-tutorial-exit" class="action-btn">Exit Tutorial</button>
+        <button id="btn-tutorial-guide" class="action-btn" type="button" aria-pressed="false">Show cut guide</button>
+        <button id="btn-tutorial-retry" class="action-btn">Retry cut</button>
+        <button id="btn-tutorial-back" class="action-btn">Back</button>
+        <button id="btn-tutorial-next" class="action-btn">Next</button>
+      </div>
+    </aside>
 
     <!-- Dedicated Round Challenge Bar -->
     <div id="round-challenge-bar" class="round-challenge-bar">
@@ -100,12 +132,13 @@
     </div>
 
     <!-- In-Game Instructions Overlay -->
-    <div class="instructions-overlay">
+    <details class="instructions-overlay">
+      <summary>Instructions</summary>
       <div>🖱️ <strong>Click &amp; Drag</strong> to slice a straight line across shapes</div>
       <div>✂️ <strong>Keep slicing</strong> pieces repeatedly to reach target percentages</div>
       <div>⚠️ <strong>Over-slice penalty</strong>: More pieces than targets = 0 points!</div>
-      <div>⌨️ <span class="key">Ctrl+Z</span> Undo | <span class="key">Shift+Drag</span> Move piece</div>
-    </div>
+      <div>⌨️ <span class="key">Shift+Drag</span> Move piece</div>
+    </details>
 
     <!-- Custom Draw Mode Top-Right Action Bar -->
     <div id="custom-draw-bar" class="custom-draw-bar">
@@ -256,6 +289,158 @@
       };
 
       const game = new PolySlice.Game.GameApp(canvas, uiElements);
+      const startScreen = document.getElementById('start-screen');
+      const tutorialPanel = document.getElementById('tutorial-panel');
+      const modeTabs = document.querySelectorAll('.mode-tabs .tab-btn');
+      const customDrawBar = document.getElementById('custom-draw-bar');
+      const tutorialStepCount = document.getElementById('tutorial-step-count');
+      const tutorialTitle = document.getElementById('tutorial-title');
+      const tutorialCopy = document.getElementById('tutorial-copy');
+      const tutorialFeedback = document.getElementById('tutorial-feedback');
+      const tutorialBackBtn = document.getElementById('btn-tutorial-back');
+      const tutorialNextBtn = document.getElementById('btn-tutorial-next');
+      const tutorialRetryBtn = document.getElementById('btn-tutorial-retry');
+      const tutorialPractice = document.getElementById('tutorial-practice');
+      const tutorialTarget = document.getElementById('tutorial-target');
+      const tutorialCurrent = document.getElementById('tutorial-current');
+      const tutorialAccuracy = document.getElementById('tutorial-accuracy');
+      const tutorialGuide = document.getElementById('tutorial-cut-guide');
+      const tutorialGuideBtn = document.getElementById('btn-tutorial-guide');
+      let tutorialStep = 0;
+      let tutorialGuideEnabled = false;
+
+      const tutorialSteps = [
+        {
+          title: 'Split it in half',
+          copy: 'Each percentage is part of the original area. Drag from outside one edge to outside the other, through the middle, to make two equal pieces.',
+          targets: [50, 50],
+          guideFraction: 0.5
+        },
+        {
+          title: 'Try an uneven split',
+          copy: 'Cut closer to an edge to make a smaller piece. For this diamond, aim just below the middle: the lower piece should cover 30% of its area.',
+          targets: [70, 30],
+          guideFraction: 1 - Math.sqrt(0.15)
+        },
+        {
+          title: 'Ready for a challenge?',
+          copy: 'Accuracy starts at 100%, minus each piece’s difference from its target. For example, 60/40 against 50/50 scores 80%. Reach 85% to clear a round; five failed attempts end the game.'
+        }
+      ];
+
+      const updateTutorialPractice = () => {
+        const targets = tutorialSteps[tutorialStep].targets;
+        if (tutorialPanel.hidden || !targets) return;
+        const totalArea = game.pieces.reduce((sum, piece) => sum + piece.area, 0);
+        const percentages = game.pieces.map(piece => Number((piece.area / totalArea * 100).toFixed(1))).sort((a, b) => b - a);
+        tutorialTarget.textContent = targets.map(value => `${value}%`).join(' / ');
+        tutorialCurrent.textContent = percentages.map(value => `${value.toFixed(1)}%`).join(' / ');
+        const complete = percentages.length === targets.length;
+        const deviation = complete ? percentages.reduce((sum, value, index) => sum + Math.abs(value - targets[index]), 0) : 0;
+        const accuracy = complete ? Math.max(0, 100 - deviation) : null;
+        tutorialAccuracy.textContent = complete ? `${accuracy.toFixed(1)}%` : '--';
+        tutorialNextBtn.disabled = !complete || accuracy < 85;
+        if (percentages.length > targets.length) {
+          tutorialFeedback.textContent = 'Too many pieces. Retry the cut.';
+        } else if (complete && accuracy < 85) {
+          tutorialFeedback.textContent = 'Aim for at least 85% accuracy, then try again.';
+        } else if (complete) {
+          tutorialFeedback.textContent = 'Target matched. Continue to the next step.';
+        } else {
+          tutorialFeedback.textContent = 'Make one cut across the shape.';
+        }
+      };
+
+      const updateGameHUD = game.updateHUD.bind(game);
+      game.updateHUD = () => {
+        updateGameHUD();
+        updateTutorialPractice();
+      };
+
+      const renderGame = game.render.bind(game);
+      game.render = () => {
+        renderGame();
+        const step = tutorialSteps[tutorialStep];
+        const showGuide = !tutorialPanel.hidden && tutorialGuideEnabled && step.targets && game.pieces.length === 1;
+        tutorialGuide.hidden = !showGuide;
+        if (showGuide) {
+          const bounds = PolySlice.Geometry.polygonBounds(game.pieces[0].getWorldPoints());
+          tutorialGuide.style.left = `${bounds.minX - 20}px`;
+          tutorialGuide.style.top = `${bounds.minY + bounds.height * step.guideFraction}px`;
+          tutorialGuide.style.width = `${bounds.width + 40}px`;
+        }
+      };
+
+      const renderTutorialStep = () => {
+        const step = tutorialSteps[tutorialStep];
+        tutorialStepCount.textContent = `Step ${tutorialStep + 1} of ${tutorialSteps.length}`;
+        tutorialTitle.textContent = step.title;
+        tutorialCopy.textContent = step.copy;
+        tutorialFeedback.textContent = '';
+        tutorialPractice.hidden = !step.targets;
+        tutorialRetryBtn.hidden = !step.targets;
+        tutorialGuideBtn.hidden = !step.targets;
+        tutorialBackBtn.disabled = tutorialStep === 0;
+        tutorialNextBtn.textContent = tutorialStep === tutorialSteps.length - 1 ? 'Start Game' : 'Next';
+        tutorialNextBtn.disabled = false;
+        updateTutorialPractice();
+      };
+
+      const loadTutorialStep = () => {
+        if (tutorialSteps[tutorialStep].targets) game.loadShape('diamond');
+        renderTutorialStep();
+      };
+
+      const startGame = () => {
+        startScreen.hidden = true;
+        tutorialPanel.hidden = true;
+        game.round = 1;
+        game.retryCount = 5;
+        game.retryLostThisRound = false;
+        game.isGameOver = false;
+        game.roundStatus = 'in_progress';
+        game.shapeBagTier = null;
+        game.shapeBag = [];
+        game.setGameMode('percentChallenge');
+        modeTabs.forEach(tab => tab.classList.toggle('active', tab.dataset.mode === 'percentChallenge'));
+        customDrawBar.classList.remove('active');
+      };
+
+      const startTutorial = () => {
+        startScreen.hidden = true;
+        tutorialStep = 0;
+        game.setGameMode('sandbox');
+        tutorialPanel.hidden = false;
+        loadTutorialStep();
+        modeTabs.forEach(tab => tab.classList.toggle('active', tab.dataset.mode === 'sandbox'));
+        customDrawBar.classList.remove('active');
+      };
+
+      document.getElementById('btn-start-game').addEventListener('click', startGame);
+      document.getElementById('btn-open-tutorial').addEventListener('click', startTutorial);
+      document.getElementById('btn-tutorial-exit').addEventListener('click', () => {
+        tutorialPanel.hidden = true;
+        startScreen.hidden = false;
+      });
+      tutorialBackBtn.addEventListener('click', () => {
+        if (tutorialStep === 0) return;
+        tutorialStep--;
+        loadTutorialStep();
+      });
+      tutorialRetryBtn.addEventListener('click', loadTutorialStep);
+      tutorialGuideBtn.addEventListener('click', () => {
+        tutorialGuideEnabled = !tutorialGuideEnabled;
+        tutorialGuideBtn.setAttribute('aria-pressed', String(tutorialGuideEnabled));
+        tutorialGuideBtn.textContent = tutorialGuideEnabled ? 'Hide cut guide' : 'Show cut guide';
+      });
+      tutorialNextBtn.addEventListener('click', () => {
+        if (tutorialStep === tutorialSteps.length - 1) {
+          startGame();
+          return;
+        }
+        tutorialStep++;
+        loadTutorialStep();
+      });
 
       // Top Action Buttons
       uiElements.undoBtn.addEventListener('click', () => game.undo());
@@ -284,9 +469,6 @@
       });
 
       // Mode Tabs
-      const modeTabs = document.querySelectorAll('.mode-tabs .tab-btn');
-      const customDrawBar = document.getElementById('custom-draw-bar');
-
       uiElements.startOverBtn.addEventListener('click', () => {
         game.startOver();
         modeTabs.forEach(tab => tab.classList.toggle('active', tab.dataset.mode === 'percentChallenge'));
@@ -295,7 +477,7 @@
 
       modeTabs.forEach(btn => {
         btn.addEventListener('click', () => {
-          if (game.isGameOver) return;
+          if (game.isGameOver || !tutorialPanel.hidden) return;
           modeTabs.forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
           const mode = btn.dataset.mode;

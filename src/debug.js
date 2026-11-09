@@ -5,6 +5,7 @@
   root.PolySlice.Debug = {
     attach(game) {
       if (new URLSearchParams(root.location.search).get('debug') !== '1') return;
+      root.document.body.classList.add('debug-enabled');
 
       const panel = root.document.createElement('div');
       panel.setAttribute('aria-label', 'Round debugger');

@@ -655,19 +655,33 @@
       }
 
       function createSpiral(cx, cy, width, height) {
-        const w = width / 2;
-        const h = height / 2;
-        const pts = [];
-        const turns = 2.6;
-        for (let i = 0; i <= 42; i++) {
-          const t = (i / 42) * (Math.PI * 2 * turns);
-          const r = (w * 0.85) * (1 - (t / (Math.PI * 2 * turns)) * 0.85);
-          pts.push({
-            x: cx + Math.cos(t) * r,
-            y: cy + Math.sin(t) * r * (h / w)
+        const baseRadius = Math.min(width, height) / 2;
+        const scaleX = width / (baseRadius * 2);
+        const scaleY = height / (baseRadius * 2);
+        const totalAngle = Math.PI * 2 * 1.08;
+        const steps = 96;
+        const outer = [];
+        const inner = [];
+
+        for (let i = 0; i <= steps; i++) {
+          const progress = i / steps;
+          const theta = -Math.PI / 2 + progress * totalAngle;
+          const centerRadius = baseRadius * (0.78 - 0.55 * progress + 0.012 * Math.sin(theta * 2));
+          const thickness = baseRadius * (0.18 + 0.06 * progress);
+          const outerRadius = centerRadius + thickness / 2;
+          const innerRadius = centerRadius - thickness / 2;
+
+          outer.push({
+            x: cx + Math.cos(theta) * outerRadius * scaleX,
+            y: cy + Math.sin(theta) * outerRadius * scaleY
+          });
+          inner.push({
+            x: cx + Math.cos(theta) * innerRadius * scaleX,
+            y: cy + Math.sin(theta) * innerRadius * scaleY
           });
         }
-        return Geometry.cleanPolygon(Geometry.ensureCCW(pts), 2);
+
+        return Geometry.cleanPolygon(Geometry.ensureCCW([...outer, ...inner.reverse()]), 0.25);
       }
 
       function createSunburst(cx, cy, width, height) {

@@ -10,6 +10,32 @@ function makeClassList() {
   };
 }
 
+function hasSelfIntersections(points) {
+  const crosses = (a, b, c, d) => {
+    const abx = b.x - a.x;
+    const aby = b.y - a.y;
+    const cdx = d.x - c.x;
+    const cdy = d.y - c.y;
+    const denominator = abx * cdy - aby * cdx;
+    if (Math.abs(denominator) < 1e-9) return false;
+    const acx = c.x - a.x;
+    const acy = c.y - a.y;
+    const t = (acx * cdy - acy * cdx) / denominator;
+    const u = (acx * aby - acy * abx) / denominator;
+    return t > 1e-6 && t < 1 - 1e-6 && u > 1e-6 && u < 1 - 1e-6;
+  };
+
+  for (let first = 0; first < points.length; first++) {
+    const firstNext = (first + 1) % points.length;
+    for (let second = first + 1; second < points.length; second++) {
+      const secondNext = (second + 1) % points.length;
+      if (first === second || firstNext === second || secondNext === first) continue;
+      if (crosses(points[first], points[firstNext], points[second], points[secondNext])) return true;
+    }
+  }
+  return false;
+}
+
 function makeCanvas(onFillText = () => {}) {
   return {
     width: 800,
@@ -258,6 +284,10 @@ assert.notDeepStrictEqual(randomHardOne, randomHardTwo, 'random hard shape shoul
 assert.strictEqual(Shapes.SHAPE_DIFFICULTY.randomHard, 4, 'random hard should be classified as tier 4');
 assert.ok(Shapes.HARD_SHAPES.includes('randomHard'), 'random hard should be included in the hard-shape registry');
 
+const spiralShape = Shapes.createSpiral(400, 300, 200, 180);
+assert.ok(spiralShape.length >= 8, 'spiral should retain a detailed curved outline');
+assert.strictEqual(hasSelfIntersections(spiralShape), false, 'spiral outline should not cross itself or create inner lines');
+
 for (const name of requiredHardShapes) {
   assert.strictEqual(typeof Shapes[name], 'function', `${name} should exist`);
   const poly = Shapes[name](400, 300, 120, 120);
@@ -281,6 +311,24 @@ assert.strictEqual(game.shapeDifficultyTier, 1, 'round 21 should restart the sha
 assert.strictEqual(Shapes.SHAPE_DIFFICULTY[game.selectedShape], 1, 'round 21 should select from the first difficulty tier');
 const initialFloatSpeed = Math.hypot(game.pieces[0].vx, game.pieces[0].vy);
 assert.ok(Math.abs(initialFloatSpeed - 30.36) < 0.001, 'round 21 pieces should begin at the increased baseline speed');
+
+const boundaryAuditShapes = [...Object.keys(Shapes.SHAPE_DIFFICULTY), 'hexagon', 'octagon', 'triangle'];
+for (const mode of ['percentChallenge', 'sandbox']) {
+  game.gameMode = mode;
+  game.round = 1;
+  for (const shapeName of boundaryAuditShapes) {
+    game.loadShape(shapeName);
+    const piece = game.pieces[0];
+    for (const angle of [0, Math.PI / 4, Math.PI / 2, Math.PI]) {
+      piece.angle = angle;
+      const bounds = Geometry.polygonBounds(piece.getWorldPoints());
+      assert.ok(bounds.minX >= 20 && bounds.maxX <= 780, `${shapeName} should fit horizontal bounds in ${mode}`);
+      assert.ok(bounds.minY >= 140 && bounds.maxY <= 470, `${shapeName} should fit vertical bounds in ${mode}`);
+    }
+  }
+}
+game.gameMode = 'percentChallenge';
+game.generateRound(21);
 
 game.round = 69;
 game.loadShape('star');

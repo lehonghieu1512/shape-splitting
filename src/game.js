@@ -169,16 +169,19 @@
       // Keyboard shortcuts
       window.addEventListener('keydown', (e) => {
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+        const debugEnabled = document.body.classList.contains('debug-enabled');
 
         if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+          if (!debugEnabled) return;
           if (e.shiftKey) this.redo();
           else this.undo();
           e.preventDefault();
         } else if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) {
+          if (!debugEnabled) return;
           this.redo();
           e.preventDefault();
         } else if (e.key === 'r' || e.key === 'R') {
-          this.resetShape();
+          if (debugEnabled) this.resetShape();
         } else if (e.key === 'm' || e.key === 'M') {
           this.toggleSound();
         }
@@ -689,23 +692,21 @@
           poly = Shapes.createStar(cx, cy, radius, radius * 0.44, 5);
       }
 
-      if (this.gameMode === 'percentChallenge' && this.round >= 21) {
-        const clearance = Math.min(32, Math.max(0, Math.min(this.width - 40, this.height - 270) * 0.1));
-        const safeLeft = 20 + clearance;
-        const safeRight = this.width - 20 - clearance;
-        const safeTop = 140 + clearance;
-        const safeBottom = this.height - 130 - clearance;
-        const safeCenterX = (safeLeft + safeRight) / 2;
-        const safeCenterY = (safeTop + safeBottom) / 2;
-        const centroid = Geometry.polygonCentroid(poly);
-        const radius = Math.max(...poly.map(point => Math.hypot(point.x - centroid.x, point.y - centroid.y)));
-        const fitScale = Math.min(1, Math.max(0, Math.min(safeRight - safeLeft, safeBottom - safeTop) - 12) / (radius * 2));
+      const clearance = Math.min(32, Math.max(0, Math.min(this.width - 40, this.height - 270) * 0.1));
+      const safeLeft = 20 + clearance;
+      const safeRight = this.width - 20 - clearance;
+      const safeTop = 140 + clearance;
+      const safeBottom = this.height - 130 - clearance;
+      const safeCenterX = (safeLeft + safeRight) / 2;
+      const safeCenterY = (safeTop + safeBottom) / 2;
+      const centroid = Geometry.polygonCentroid(poly);
+      const fitRadius = Math.max(...poly.map(point => Math.hypot(point.x - centroid.x, point.y - centroid.y)));
+      const fitScale = Math.min(1, Math.max(0, Math.min(safeRight - safeLeft, safeBottom - safeTop) - 12) / (fitRadius * 2));
 
-        poly = poly.map(point => ({
-          x: safeCenterX + (point.x - centroid.x) * fitScale,
-          y: safeCenterY + (point.y - centroid.y) * fitScale
-        }));
-      }
+      poly = poly.map(point => ({
+        x: safeCenterX + (point.x - centroid.x) * fitScale,
+        y: safeCenterY + (point.y - centroid.y) * fitScale
+      }));
 
       if (this.round >= 70) {
         const centroid = Geometry.polygonCentroid(poly);
@@ -947,7 +948,7 @@
 
             // Percent Challenge Round Bar
             if (this.gameMode === 'percentChallenge') {
-              if (this.ui.roundBar) this.ui.roundBar.style.display = 'flex';
+              if (this.ui.roundBar) this.ui.roundBar.style.display = '';
               if (this.ui.currentPiecesContainer) {
                 this.ui.currentPiecesContainer.style.display = this.round >= 90 ? 'none' : 'flex';
               }
